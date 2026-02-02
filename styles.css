@@ -1,0 +1,68 @@
+:root{
+    --card-bg: rgba(255,255,255,0.75);
+    --glass-border: rgba(255,255,255,0.35);
+}
+
+body{
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 20% 10%, rgba(13,110,253,.18), transparent 60%),
+                radial-gradient(900px 500px at 90% 40%, rgba(32,201,151,.18), transparent 55%),
+                linear-gradient(180deg, #0b1220, #0a0f1a);
+    color: #e9eefb;
+}
+
+.hero-wrap{
+    padding: 48px 0;
+}
+
+.glass{
+    background: var(--card-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 1.25rem;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 20px 60px rgba(0,0,0,.35);
+    color: #0f172a;
+}
+
+.badge-soft{
+    background: rgba(13,110,253,.10);
+    color: #0b5ed7;
+    border: 1px solid rgba(13,110,253,.18);
+}
+
+.clock-stage{
+    display: grid;
+    place-items: center;
+    padding: 14px;
+    border-radius: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35));
+    border: 1px solid rgba(15,23,42,.08);
+}
+
+/* Canvas "retina" crisp */
+canvas{
+    width: 320px;
+    height: 320px;
+    max-width: 80vw;
+    max-height: 80vw;
+    display: block;
+}
+
+.digital{
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .5px;
+}
+
+.small-muted{
+    color: rgba(15,23,42,.65);
+}
+
+.form-select, .form-control{
+    border-radius: 0.9rem;
+}
+
+.footer-hint{
+    color: rgba(233,238,251,.75);
+    font-size: .95rem;
+}

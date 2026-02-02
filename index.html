@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JS_Project</title>
+    <!-- Bootstrap 5 (CDN) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="container hero-wrap">
+    <div class="row justify-content-center">
+      <div class="col-12 col-lg-8">
+        <section class="glass p-4 p-md-5">
+          <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+            <div>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="badge badge-soft rounded-pill px-3 py-2">Раздел</span>
+                <span class="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">Часы</span>
+              </div>
+              <h1 class="display-6 fw-semibold mb-1">Часы</h1>
+              <div class="small-muted">Выбери часовой пояс — и смотри время на аналоговых и цифровых часах.</div>
+            </div>
+
+            <div class="w-100 w-md-auto" style="max-width: 360px;">
+              <label for="tzSelect" class="form-label fw-semibold mb-2">Часовой пояс</label>
+              <select id="tzSelect" class="form-select">
+                <!-- заполнится JS -->
+              </select>
+              <div id="tzMeta" class="small mt-2 small-muted"></div>
+            </div>
+          </div>
+
+          <div class="clock-stage mb-4">
+            <canvas id="clockCanvas" aria-label="Analog clock" role="img"></canvas>
+          </div>
+
+          <div class="text-center">
+            <div class="text-uppercase small-muted mb-1">Текущее время</div>
+            <div id="digitalTime" class="digital display-6 fw-semibold">--:--:--</div>
+            <div id="digitalDate" class="small-muted mt-2">—</div>
+          </div>
+        </section>
+
+        <div class="text-center mt-4 footer-hint">
+          Работает без библиотек часов: только JS + Canvas + Bootstrap.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// -------- Timezone list --------
+// A practical set + autodetect
+    const RU_TIMEZONES = [
+    { tz: "Europe/Kaliningrad",  label: "Калининград (UTC+2)" },
+    { tz: "Europe/Moscow",       label: "Москва (МСК, UTC+3)" },
+    { tz: "Europe/Samara",       label: "Самара (UTC+4)" },
+    { tz: "Asia/Yekaterinburg",  label: "Екатеринбург (UTC+5)" },
+    { tz: "Asia/Omsk",           label: "Омск (UTC+6)" },
+    { tz: "Asia/Krasnoyarsk",    label: "Красноярск (UTC+7)" },
+    { tz: "Asia/Irkutsk",        label: "Иркутск (UTC+8)" },
+    { tz: "Asia/Yakutsk",        label: "Якутск (UTC+9)" },
+    { tz: "Asia/Vladivostok",    label: "Владивосток (UTC+10)" },
+    { tz: "Asia/Magadan",        label: "Магадан (UTC+11)" },
+    { tz: "Asia/Kamchatka",      label: "Камчатка (UTC+12)" }
+];
+
+    const tzSelect = document.getElementById("tzSelect");
+    const tzMeta = document.getElementById("tzMeta");
+
+    function getAutoTimeZone(){
+      try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      } catch {
+        return "UTC";
+      }
+    }
+
+    const AUTO_TZ = getAutoTimeZone();
+
+    function buildTimeZoneSelect(){
+        tzSelect.innerHTML = "";
+
+        RU_TIMEZONES.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item.tz;      // для JS
+        opt.textContent = item.label; // для пользователя
+        tzSelect.appendChild(opt);
+        });
+
+        // По умолчанию — Москва
+        tzSelect.value = "Europe/Moscow";
+        updateTzMeta();
+    }
+
+    function getGMTOffsetString(date, timeZone){
+      // Uses formatToParts trick: compare target TZ time with UTC components
+      // We'll compute offset minutes by reconstructing a UTC timestamp for the formatted parts.
+      const dtf = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
+      });
+      const parts = dtf.formatToParts(date);
+      const map = {};
+      for(const p of parts) map[p.type] = p.value;
+
+      const asUTC = Date.UTC(
+        Number(map.year),
+        Number(map.month) - 1,
+        Number(map.day),
+        Number(map.hour),
+        Number(map.minute),
+        Number(map.second)
+      );
+
+      const diffMs = asUTC - date.getTime(); // tzTime(UTCstamp) - realUTCstamp
+      const offsetMin = Math.round(diffMs / 60000);
+
+      const sign = offsetMin >= 0 ? "+" : "-";
+      const abs = Math.abs(offsetMin);
+      const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+      const mm = String(abs % 60).padStart(2, "0");
+      return `GMT${sign}${hh}:${mm}`;
+    }
+
+    function updateTzMeta(){
+      const tz = tzSelect.value;
+      const now = new Date();
+      const gmt = getGMTOffsetString(now, tz);
+      tzMeta.textContent = `Смещение: ${gmt}`;
+    }
+
+    // -------- Date in selected timezone --------
+    function getZonedParts(date, timeZone){
+      // Returns numbers: hours, minutes, seconds in that TZ
+      const dtf = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short"
+      });
+      const parts = dtf.formatToParts(date);
+      const map = {};
+      for(const p of parts){
+        if(p.type !== "literal") map[p.type] = p.value;
+      }
+      return {
+        hour: Number(map.hour),
+        minute: Number(map.minute),
+        second: Number(map.second),
+        year: Number(map.year),
+        month: Number(map.month),
+        day: Number(map.day),
+        weekday: map.weekday
+      };
+    }
+
+    function formatDigital(date, timeZone){
+      // Digital time + date string in user's locale
+      const timeFmt = new Intl.DateTimeFormat("ru-RU", {
+        timeZone,
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+
+      const dateFmt = new Intl.DateTimeFormat("ru-RU", {
+        timeZone,
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "2-digit"
+      });
+
+      return {
+        time: timeFmt.format(date),
+        date: dateFmt.format(date)
+      };
+    }
+
+    // -------- Canvas clock drawing --------
+    const canvas = document.getElementById("clockCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function setupCanvasForDPR(){
+      const dpr = window.devicePixelRatio || 1;
+      const cssSize = 320; // matches CSS width/height
+      canvas.width = Math.floor(cssSize * dpr);
+      canvas.height = Math.floor(cssSize * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+    }
+
+    function drawClockFace(cx, cy, r){
+      // outer ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(15,23,42,0.04)";
+      ctx.fill();
+
+      // subtle shadow ring
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "rgba(15,23,42,0.12)";
+      ctx.stroke();
+
+      // inner face
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 10, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fill();
+
+      // minute ticks
+      for(let i=0; i<60; i++){
+        const ang = (i * Math.PI / 30) - Math.PI/2;
+        const isHour = (i % 5 === 0);
+        const len = isHour ? 14 : 7;
+        const w = isHour ? 3 : 1.5;
+
+        const x1 = cx + Math.cos(ang) * (r - 24);
+        const y1 = cy + Math.sin(ang) * (r - 24);
+        const x2 = cx + Math.cos(ang) * (r - 24 - len);
+        const y2 = cy + Math.sin(ang) * (r - 24 - len);
+
+        ctx.beginPath();
+        ctx.moveTo(x1,y1);
+        ctx.lineTo(x2,y2);
+        ctx.lineWidth = w;
+        ctx.strokeStyle = "rgba(15,23,42,0.55)";
+        ctx.stroke();
+      }
+
+      // numbers 12/3/6/9
+      ctx.fillStyle = "rgba(15,23,42,0.85)";
+      ctx.font = "600 20px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const nums = [
+        {n:"12", a:-Math.PI/2},
+        {n:"3",  a:0},
+        {n:"6",  a:Math.PI/2},
+        {n:"9",  a:Math.PI},
+      ];
+
+      for(const it of nums){
+        const x = cx + Math.cos(it.a) * (r - 54);
+        const y = cy + Math.sin(it.a) * (r - 54);
+        ctx.fillText(it.n, x, y);
+      }
+    }
+
+    function drawHand(cx, cy, angle, length, width, color, cap = "round"){
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(0, 10);           // small tail
+      ctx.lineTo(0, -length);
+      ctx.lineWidth = width;
+      ctx.lineCap = cap;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function renderClock(date, timeZone){
+      const w = 320, h = 320;
+      ctx.clearRect(0,0,w,h);
+
+      const cx = w/2, cy = h/2;
+      const r = 140;
+
+      drawClockFace(cx, cy, r);
+
+      const p = getZonedParts(date, timeZone);
+      const hours = p.hour % 12;
+      const minutes = p.minute;
+      const seconds = p.second;
+
+      // Angles (start at top => -90deg)
+      const secA  = (seconds * Math.PI/30) - Math.PI/2;
+      const minA  = ((minutes + seconds/60) * Math.PI/30) - Math.PI/2;
+      const hourA = ((hours + minutes/60 + seconds/3600) * Math.PI/6) - Math.PI/2;
+
+      // hands
+      drawHand(cx, cy, hourA, 70, 7, "rgba(15,23,42,0.85)");
+      drawHand(cx, cy, minA, 100, 5, "rgba(15,23,42,0.75)");
+      drawHand(cx, cy, secA, 108, 2, "rgba(220,53,69,0.85)", "round");
+
+      // center dot
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(15,23,42,0.9)";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI*2);
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.fill();
+    }
+
+    // -------- Main loop --------
+    const digitalTime = document.getElementById("digitalTime");
+    const digitalDate = document.getElementById("digitalDate");
+
+    function tick(){
+      const tz = tzSelect.value;
+      const now = new Date();
+
+      const d = formatDigital(now, tz);
+      digitalTime.textContent = d.time;
+      digitalDate.textContent = d.date;
+
+      renderClock(now, tz);
+    }
+
+    function start(){
+      buildTimeZoneSelect();
+      setupCanvasForDPR();
+
+      tzSelect.addEventListener("change", () => {
+        updateTzMeta();
+        tick();
+      });
+
+      // initial draw
+      tick();
+
+      // Keep ticking at 1s
+      setInterval(tick, 1000);
+
+      // handle resize (re-init dpr scaling)
+      window.addEventListener("resize", () => {
+        setupCanvasForDPR();
+        tick();
+      });
+    }
+
+    start();
+  </script>
+</body>
+</html>

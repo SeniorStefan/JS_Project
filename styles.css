@@ -69,3 +69,63 @@ canvas{
 	color: rgba(233,238,251,.75);
 	font-size: .95rem;
 }
+
+/* ====== Пейджер снизу (общая навигация) ====== */
+.pager-nav{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 1.25rem;
+}
+.pager-btn{
+  min-width: 56px;
+  border-radius: 1rem;
+  font-weight: 700;
+}
+.pager-center{
+  flex: 1;
+  text-align: center;
+}
+.pager-title{
+  color: rgba(233,238,251,.92);
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.pager-dots{
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pager-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(233,238,251,.45);
+  background: rgba(233,238,251,.18);
+  cursor: pointer;
+  padding: 0;
+}
+.pager-dot.active{
+  background: rgba(233,238,251,.85);
+  border-color: rgba(233,238,251,.85);
+}
+.pager-dot:focus{
+  outline: 2px solid rgba(13,110,253,.45);
+  outline-offset: 2px;
+}
+
+/* ====== График (калькулятор) ====== */
+.graph-wrap{
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.35));
+  border: 1px solid rgba(15,23,42,.08);
+}
+#plotCanvas{
+  max-width: 100%;
+  display: block;
+  border-radius: 0.75rem;
+}

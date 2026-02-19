@@ -4,10 +4,11 @@
   const scoreOut = document.getElementById("scoreOut");
   const btnReset = document.getElementById("btnReset");
   const btnPause = document.getElementById("btnPause");
-  if(!canvas || !ctx) return;
+
+  if (!canvas || !ctx) return;
 
   const TAU = Math.PI * 2;
-  const normAngle = (a) => { a %= TAU; if (a < 0) a += TAU; return a; };
+  const normAngle = a => { a %= TAU; if (a < 0) a += TAU; return a; };
 
   function angleInArc(theta, start, end) {
     theta = normAngle(theta);
@@ -17,24 +18,25 @@
     return theta >= start || theta <= end;
   }
 
-  function rand(min, max) {
-    return min + Math.random() * (max - min);
-  }
+  function rand(min, max) { return min + Math.random() * (max - min); }
+
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
   const CFG = {
-    ringCount: 8,
-    ringGapDeg: 32,
-    ringThickness: 9,
-    ringSpacing: 22,
-    ringRotateMin: -0.9,
-    ringRotateMax: 0.9,
-    ballRadius: 7,
-    ballSpeed: 220,
-    bg: "rgba(255,255,255,0.65)",
-    ringColor: "rgba(13,110,253,0.85)",
-    ringColor2: "rgba(13,110,253,0.45)",
-    ballColor: "rgba(220,53,69,0.92)",
-    dotColor: "rgba(255,255,255,0.9)"
+    ringCount: isMobile ? 7 : 8,
+    ringGapDeg: isMobile ? 38 : 34,
+    ringThickness: 10,
+    ringSpacing: isMobile ? 26 : 22,
+    ringRotateMin: -1.1,
+    ringRotateMax: 1.1,
+    ballRadius: isMobile ? 9 : 7,
+    ballSpeed: isMobile ? 160 : 220,
+    bg: "rgba(255,255,255,0.70)",
+    ringColor: "rgba(13,110,253,0.9)",
+    ringColor2: "rgba(13,110,253,0.5)",
+    ballColor: "rgba(220,53,69,0.95)",
+    dotColor: "rgba(255,255,255,1)",
+    minSpeed: 120  // минимальная скорость, ниже которой возвращаем
   };
 
   let W = 0, H = 0, cx = 0, cy = 0;
@@ -46,11 +48,14 @@
 
   function setupCanvas() {
     const dpr = window.devicePixelRatio || 1;
-    const cssW = Math.min(760, Math.floor(window.innerWidth * 0.88));
-    const cssH = 520;
+    let cssW = window.innerWidth * (isMobile ? 0.98 : 0.88);
+    let cssH = window.innerHeight * (isMobile ? 0.58 : 0.65);
 
-    canvas.style.width = cssW + "px";
-    canvas.style.height = cssH + "px";
+    cssW = Math.min(760, cssW);
+    cssH = Math.min(580, cssH);
+
+    canvas.style.width = `${cssW}px`;
+    canvas.style.height = `${cssH}px`;
     canvas.width = Math.floor(cssW * dpr);
     canvas.height = Math.floor(cssH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -60,20 +65,18 @@
   }
 
   function recalcTargets() {
-    const maxR = Math.min(W, H) * 0.42;
-    for (let i = 0; i < rings.length; i++) {
-      rings[i].targetR = maxR - i * CFG.ringSpacing;
-    }
+    const maxR = Math.min(W, H) * 0.44;
+    rings.forEach((r, i) => r.targetR = maxR - i * CFG.ringSpacing);
   }
 
   function addOuterRing() {
-    const maxExisting = rings.reduce((m, r) => Math.max(m, r.targetR), 0);
-    const newTarget = maxExisting + CFG.ringSpacing;
+    const maxR = rings.reduce((m, r) => Math.max(m, r.targetR), 0);
+    const newTarget = maxR + CFG.ringSpacing;
     rings.unshift({
       targetR: newTarget,
-      r: newTarget + 50,
+      r: newTarget + 60,
       gapCenter: rand(0, TAU),
-      gapSize: (CFG.ringGapDeg * Math.PI / 180),
+      gapSize: CFG.ringGapDeg * Math.PI / 180,
       rotSpeed: rand(CFG.ringRotateMin, CFG.ringRotateMax),
       thickness: CFG.ringThickness
     });
@@ -87,14 +90,14 @@
     btnPause.textContent = "Пауза";
     rings.length = 0;
 
-    const maxR = Math.min(W, H) * 0.42;
+    const maxR = Math.min(W, H) * 0.44;
     for (let i = 0; i < CFG.ringCount; i++) {
       const targetR = maxR - i * CFG.ringSpacing;
       rings.push({
         targetR,
         r: targetR,
         gapCenter: rand(0, TAU),
-        gapSize: (CFG.ringGapDeg * Math.PI / 180),
+        gapSize: CFG.ringGapDeg * Math.PI / 180,
         rotSpeed: rand(CFG.ringRotateMin, CFG.ringRotateMax),
         thickness: CFG.ringThickness
       });
@@ -103,72 +106,65 @@
     ball.x = cx;
     ball.y = cy;
     const ang = rand(0, TAU);
-    const speed = CFG.ballSpeed;
-    ball.vx = Math.cos(ang) * speed;
-    ball.vy = Math.sin(ang) * speed;
+    ball.vx = Math.cos(ang) * CFG.ballSpeed;
+    ball.vy = Math.sin(ang) * CFG.ballSpeed;
   }
 
   function stepRings(dt) {
-    for (const r of rings) {
+    rings.forEach(r => {
       r.gapCenter = normAngle(r.gapCenter + r.rotSpeed * dt);
       const k = 1 - Math.pow(0.001, dt);
       r.r += (r.targetR - r.r) * k;
-    }
+    });
   }
 
-  // Добавляет случайное отклонение направления при отскоке
-  function addRandomDeflection(strength = 0.25) {
+  function addRandomDeflection(strength = 0.28) {
     const angle = Math.atan2(ball.vy, ball.vx);
-    const speed = Math.hypot(ball.vx, ball.vy);
+    let speed = Math.hypot(ball.vx, ball.vy);
+    if (speed < CFG.minSpeed) speed = CFG.minSpeed; // защита от слишком медленной скорости
 
-    // Основное случайное отклонение
     const deviation = rand(-strength, strength);
-    
-    // Дополнительный "рывок" с небольшой вероятностью
-    const extra = Math.random() < 0.22 ? rand(-0.35, 0.35) : 0;
-
+    const extra = Math.random() < 0.22 ? rand(-0.4, 0.4) : 0;
     const newAngle = angle + deviation + extra;
 
     ball.vx = Math.cos(newAngle) * speed;
     ball.vy = Math.sin(newAngle) * speed;
   }
 
+  function clampBallPosition() {
+    const pad = CFG.ballRadius + 4;
+    ball.x = Math.max(pad, Math.min(W - pad, ball.x));
+    ball.y = Math.max(pad, Math.min(H - pad, ball.y));
+  }
+
   function ballPhysics(dt) {
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
-    // Отскок от границ canvas
-    const pad = 12;
-    let bouncedWall = false;
+    clampBallPosition();
 
-    if (ball.x < pad + CFG.ballRadius) {
-      ball.x = pad + CFG.ballRadius;
-      ball.vx = -ball.vx;
-      bouncedWall = true;
-    }
-    if (ball.x > W - pad - CFG.ballRadius) {
-      ball.x = W - pad - CFG.ballRadius;
-      ball.vx = -ball.vx;
-      bouncedWall = true;
-    }
-    if (ball.y < pad + CFG.ballRadius) {
-      ball.y = pad + CFG.ballRadius;
-      ball.vy = -ball.vy;
-      bouncedWall = true;
-    }
-    if (ball.y > H - pad - CFG.ballRadius) {
-      ball.y = H - pad - CFG.ballRadius;
-      ball.vy = -ball.vy;
-      bouncedWall = true;
-    }
+    const pad = CFG.ballRadius + 8;
+    let bounced = false;
 
-    if (bouncedWall) {
-      addRandomDeflection(0.18);   // меньшее отклонение от стен
-    }
+    if (ball.x < pad) { ball.x = pad; ball.vx = Math.abs(ball.vx); bounced = true; }
+    if (ball.x > W - pad) { ball.x = W - pad; ball.vx = -Math.abs(ball.vx); bounced = true; }
+    if (ball.y < pad) { ball.y = pad; ball.vy = Math.abs(ball.vy); bounced = true; }
+    if (ball.y > H - pad) { ball.y = H - pad; ball.vy = -Math.abs(ball.vy); bounced = true; }
+
+    if (bounced) addRandomDeflection(isMobile ? 0.22 : 0.18);
 
     const dx = ball.x - cx;
     const dy = ball.y - cy;
-    const dist = Math.hypot(dx, dy);
+    const distSq = dx*dx + dy*dy;
+    let dist = Math.sqrt(distSq);
+
+    // защита от NaN / нулевого расстояния
+    if (!isFinite(dist) || dist < 1e-6) {
+      dist = 1;
+      ball.x = cx + rand(-10,10);
+      ball.y = cy + rand(-10,10);
+    }
+
     const theta = Math.atan2(dy, dx);
 
     for (let i = rings.length - 1; i >= 0; i--) {
@@ -176,8 +172,7 @@
       const inner = r.r - r.thickness / 2;
       const outer = r.r + r.thickness / 2;
 
-      const crosses = (dist + CFG.ballRadius >= inner) && (dist - CFG.ballRadius <= outer);
-      if (!crosses) continue;
+      if (dist + CFG.ballRadius < inner || dist - CFG.ballRadius > outer) continue;
 
       const gapHalf = r.gapSize / 2;
       const inGap = angleInArc(theta, r.gapCenter - gapHalf, r.gapCenter + gapHalf);
@@ -185,54 +180,62 @@
       if (inGap) {
         rings.splice(i, 1);
         score++;
-        scoreOut.textContent = String(score);
+        scoreOut.textContent = score;
         addOuterRing();
         recalcTargets();
         break;
       } else {
-        // отскок от кольца
-        const nx = dist === 0 ? 1 : dx / dist;
-        const ny = dist === 0 ? 0 : dy / dist;
-        const dot = ball.vx * nx + ball.vy * ny;
+        let nx = dx / dist;
+        let ny = dy / dist;
 
+        // защита от NaN
+        if (!isFinite(nx) || !isFinite(ny)) {
+          nx = 1; ny = 0;
+        }
+
+        const dot = ball.vx * nx + ball.vy * ny;
         ball.vx -= 2 * dot * nx;
         ball.vy -= 2 * dot * ny;
 
-        // ← случайное отклонение при отскоке от кольца (самое заметное)
-        addRandomDeflection(0.28);   // 16° ± примерно
+        addRandomDeflection(isMobile ? 0.35 : 0.28);
 
-        const targetDist = (dist > r.r)
-          ? (outer + CFG.ballRadius + 1)
-          : (inner - CFG.ballRadius - 1);
+        const targetDist = dist > r.r
+          ? outer + CFG.ballRadius + 2
+          : inner - CFG.ballRadius - 2;
+
         ball.x = cx + nx * targetDist;
         ball.y = cy + ny * targetDist;
 
+        clampBallPosition(); // после коррекции тоже ограничиваем
         break;
       }
+    }
+
+    // финальная защита — если шарик всё равно улетел далеко
+    if (Math.hypot(ball.x - cx, ball.y - cy) > Math.max(W, H) * 1.5) {
+      ball.x = cx;
+      ball.y = cy;
     }
   }
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-
     ctx.fillStyle = CFG.bg;
     ctx.fillRect(0, 0, W, H);
 
     const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.min(W, H) * 0.45);
-    grad.addColorStop(0, "rgba(13,110,253,0.08)");
+    grad.addColorStop(0, "rgba(13,110,253,0.10)");
     grad.addColorStop(1, "rgba(13,110,253,0.00)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    for (let i = 0; i < rings.length; i++) {
-      const r = rings[i];
-      const gapHalf = r.gapSize / 2;
-      const gs = normAngle(r.gapCenter - gapHalf);
-      const ge = normAngle(r.gapCenter + gapHalf);
+    rings.forEach((r, i) => {
+      const gs = normAngle(r.gapCenter - r.gapSize / 2);
+      const ge = normAngle(r.gapCenter + r.gapSize / 2);
 
       ctx.lineWidth = r.thickness;
       ctx.lineCap = "round";
-      ctx.strokeStyle = (i % 2 === 0) ? CFG.ringColor : CFG.ringColor2;
+      ctx.strokeStyle = i % 2 === 0 ? CFG.ringColor : CFG.ringColor2;
 
       ctx.beginPath();
       if (gs <= ge) {
@@ -247,9 +250,9 @@
       const py = cy + Math.sin(r.gapCenter) * r.r;
       ctx.fillStyle = CFG.dotColor;
       ctx.beginPath();
-      ctx.arc(px, py, 2.4, 0, TAU);
+      ctx.arc(px, py, 3, 0, TAU);
       ctx.fill();
-    }
+    });
 
     ctx.fillStyle = CFG.ballColor;
     ctx.beginPath();
@@ -260,7 +263,7 @@
   let lastT = 0;
   function loop(t) {
     const now = t / 1000;
-    const dt = Math.min(0.033, (now - lastT) || 0.016);
+    const dt = Math.min(0.033, now - lastT || 0.016);
     lastT = now;
 
     if (!paused) {
@@ -280,21 +283,38 @@
 
   window.addEventListener("resize", () => {
     const oldScore = score;
-    const rx = (ball.x - cx) / (Math.min(W, H) || 1);
-    const ry = (ball.y - cy) / (Math.min(W, H) || 1);
+    const oldDist = Math.hypot(ball.x - cx, ball.y - cy);
+    const oldAngle = Math.atan2(ball.y - cy, ball.x - cx);
     const vx = ball.vx, vy = ball.vy;
 
     setupCanvas();
     recalcTargets();
     score = oldScore;
-    scoreOut.textContent = String(score);
+    scoreOut.textContent = score;
 
-    ball.x = cx + rx * Math.min(W, H);
-    ball.y = cy + ry * Math.min(W, H);
-    ball.vx = vx; ball.vy = vy;
+    // восстанавливаем позицию по относительному расстоянию и углу
+    const newMaxR = Math.min(W, H) * 0.44;
+    const newR = Math.min(oldDist, newMaxR * 0.8);
+    ball.x = cx + Math.cos(oldAngle) * newR;
+    ball.y = cy + Math.sin(oldAngle) * newR;
+    ball.vx = vx;
+    ball.vy = vy;
+
+    clampBallPosition();
   });
 
-  // Запуск
+  // Блокировка touch
+  function preventDefault(e) {
+    if (e.touches && (e.touches.length > 1 || e.type === 'touchmove')) {
+      e.preventDefault();
+    }
+  }
+
+  canvas.addEventListener('touchstart', preventDefault, { passive: false });
+  canvas.addEventListener('touchmove', preventDefault, { passive: false });
+  canvas.addEventListener('touchend', preventDefault, { passive: false });
+  canvas.addEventListener('gesturestart', e => e.preventDefault());
+
   reset();
   requestAnimationFrame(loop);
 })();
